@@ -1,30 +1,27 @@
-import zipfile
-import os
-import pandas as pd
+import requests
 
-def load_csv(file_path):
+def fetch_news_from_api(api_key, query, language='en', page_size=100):
+    """
+    Fetch news articles from TheNEWSapi based on the query.
+    """
+    url = "https://api.thenewsapi.com/v1/news/all"
+    params = {
+        "api_token": api_key,
+        "search": query,
+        "language": language,
+        "page_size": page_size
+    }
     try:
-        df = pd.read_csv(file_path, sep="\t", low_memory=False)
-        print(f"Loaded {len(df)} rows from {file_path}")
-        return df
-    except Exception as e:
-        print(f"Error loading CSV: {e}")
-        return None
+        print(f"Fetching news with query: {query}, language: {language}, page_size: {page_size}")
+        response = requests.get(url, params=params)
+        response.raise_for_status()
 
+        print("API Response:", response.json())
 
-def extract_zip(file_path, extract_to):
-    if not os.path.exists(extract_to):
-        os.makedirs(extract_to)
-
-    with zipfile.ZipFile(file_path, 'r') as zip_ref:
-        for file in zip_ref.namelist():
-            target_path = os.path.join(extract_to, file)
-            if os.path.exists(target_path):
-                os.remove(target_path)
-            zip_ref.extract(file, extract_to)
-    print(f"Extracted files: {zip_ref.namelist()}")
-    return zip_ref.namelist()
-
-
-
-
+        news_data = response.json()
+        articles = news_data.get("data", [])
+        print(f"Number of articles fetched: {len(articles)}")
+        return articles
+    except requests.exceptions.RequestException as e:
+        print(f"Error fetching news from API: {e}")
+        return [] 

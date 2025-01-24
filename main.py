@@ -1,29 +1,33 @@
-import os
-from modules.data_loader import extract_zip, load_csv
-from modules.data_processing import process_gdelt_data
+from modules.data_loader import fetch_news_from_api
 from modules.recommendation import create_faiss_index, recommend_events_faiss
+import pandas as pd
 
 processed_data = None
 faiss_index = None
 embedding_model = None
 indices_map = None
 
-def initialize_backend(zip_file_path, extract_to, text_column="Actor1Name"):
+API_KEY = "aPiOlUCDEo9wOXFJuq7a3mTIR3JEinCWeRDGg1kl" 
+
+def initialize_backend(query, text_column="title", language="en"):
+    """
+    Initialize the backend by fetching news and creating FAISS index.
+    """
     global processed_data, faiss_index, embedding_model, indices_map
+
+    news_articles = fetch_news_from_api(API_KEY, query, language=language)
+    if not news_articles:
+        return {"error": "Failed to fetch news articles from TheNEWSapi."}
     
-    extracted_files = extract_zip(zip_file_path, extract_to)
-    if not extracted_files:
-        return {"error": "No files were extracted. Please check the ZIP file."}
-    
-    csv_file = os.path.join(extract_to, extracted_files[0])  
-    gdelt_data = load_csv(csv_file)
-    if gdelt_data is None or gdelt_data.empty:
-        return {"error": f"Failed to load data from {csv_file}."}
-    
-    processed_data = process_gdelt_data(gdelt_data)
-    if processed_data is None or processed_data.empty:
-        return {"error": "Data processing failed."}
-    
+    data = pd.DataFrame(news_articles)
+    if data.empty:
+        return {"error": "No news articles found."}
+
+    if text_column not in data.columns:
+        return {"error": f"Column '{text_column}' not found in API response."}
+
+    processed_data = data
+
     try:
         faiss_index, embedding_model, indices_map = create_faiss_index(
             processed_data, text_column=text_column
@@ -33,7 +37,7 @@ def initialize_backend(zip_file_path, extract_to, text_column="Actor1Name"):
     
     return {"success": True}
 
-def get_recommendations(query, top_k=5, text_column="Actor1Name"):
+def get_recommendations(query, top_k=5, text_column="title"):
     global processed_data, faiss_index, embedding_model, indices_map
 
     if (
@@ -43,16 +47,30 @@ def get_recommendations(query, top_k=5, text_column="Actor1Name"):
         or embedding_model is None 
         or not indices_map
     ):
-        raise ValueError("The backend has not been properly initialized. Ensure all components are loaded.")
+        raise ValueError("The backend has not been properly initialized.")
 
-    recommendations = recommend_events_faiss(
-        processed_data,
-        query,
-        faiss_index,
-        embedding_model,
-        indices_map,
-        text_column=text_column,
-        top_k=top_k
-    )
-    return recommendations
+    total_available = len(processed_data)
+    print("Total Available:", total_available)
 
+    top_k = min(top_k, total_available)
+
+    try:
+        recommendations = recommend_events_faiss(
+            processed_data,
+            query,
+            faiss_index,
+            embedding_model,
+            indices_map,
+            text_column=text_column,
+            top_k=top_k
+        )
+
+        if recommendations.empty:
+            print(f"No recommendations found for query: {query}")
+        else:
+            print(f"Number of recommendations found: {len(recommendations)}")
+        return recommendations
+
+    except Exception as e:
+        print(f"Error during recommendation generation: {e}")
+        return pd.DataFrame()  
