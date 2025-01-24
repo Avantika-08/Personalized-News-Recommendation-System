@@ -1,13 +1,16 @@
 from modules.data_loader import fetch_news_from_api
 from modules.recommendation import create_faiss_index, recommend_events_faiss
 import pandas as pd
+from dotenv import load_dotenv
+import os
 
 processed_data = None
 faiss_index = None
 embedding_model = None
 indices_map = None
 
-API_KEY = "aPiOlUCDEo9wOXFJuq7a3mTIR3JEinCWeRDGg1kl" 
+load_dotenv()
+api_key = os.getenv("API_KEY")
 
 def initialize_backend(query, text_column="title", language="en"):
     """
